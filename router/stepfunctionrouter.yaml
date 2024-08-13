@@ -1,0 +1,92 @@
+{
+  "Comment": "A description of my state machine",
+  "StartAt": "Check intent",
+  "States": {
+    "Check intent": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::bedrock:invokeModel",
+      "Parameters": {
+        "ModelId": "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0",
+        "Body": {
+          "messages": [
+            {
+              "role": "user",
+              "content.$": "$.Comment"
+            }
+          ],
+          "system": "You are a expert in identifying intent from the user question.  You will read the text provided carefully and determine the intent of the user.  You will then classify the intent in to one of 2 categories - coding_assistant or  architecture_assistant. If user request is for providing coding help then categorize it as coding_assistant.  If user request is for providing guidance, best practices, architecture questions calssify them  as architecture_assistant.  Respond with just the classification type.  Do NOT add any preamble",
+          "max_tokens": 3000,
+          "temperature": 0.7,
+          "anthropic_version": "",
+          "top_k": 250,
+          "top_p": 0.7,
+          "stop_sequences": [
+            "\n\nHuman:"
+          ]
+        }
+      },
+      "Next": "KB vs Internet"
+    },
+    "KB vs Internet": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.Body.content[0].text",
+          "StringEquals": "architecture_assistant",
+          "Next": "Retrieve From WAF"
+        },
+        {
+          "Variable": "$.Body.content[0].text",
+          "StringEquals": "coding_assistant",
+          "Next": "Retrieve from Internet"
+        }
+      ]
+    },
+    "Retrieve from Internet": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::bedrock:invokeModel",
+      "Parameters": {
+        "ModelId": "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0",
+        "Body": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "Generate python code for prime numbers"
+            }
+          ],
+          "max_tokens": 3000,
+          "temperature": 0.7,
+          "anthropic_version": "",
+          "top_k": 250,
+          "top_p": 0.7,
+          "stop_sequences": [
+            "\n\nHuman:"
+          ]
+        }
+      },
+      "End": true,
+      "InputPath": "$.Comment"
+    },
+    "Retrieve From WAF": {
+      "Type": "Task",
+      "End": true,
+      "Parameters": {
+        "Input": {
+          "Text": "What are the 5 pillars of well architected framework?"
+        },
+        "RetrieveAndGenerateConfiguration": {
+          "KnowledgeBaseConfiguration": {
+            "KnowledgeBaseId": "4V4UV8DXOX",
+            "ModelArn": "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0",
+            "RetrievalConfiguration": {
+              "VectorSearchConfiguration": {
+                "NumberOfResults": 3
+              }
+            }
+          }
+        }
+      },
+      "Resource": "arn:aws:states:::aws-sdk:bedrockagentruntime:retrieveAndGenerate"
+    }
+  }
+}
